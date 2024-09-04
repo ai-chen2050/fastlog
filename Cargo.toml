@@ -1,0 +1,48 @@
+[workspace]
+members = [
+    "crates/types",
+    "crates/common",
+    "crates/websocket",
+    "crates/alloy-wrapper",
+    "crates/tools",
+    "crates/vrf",
+    "fastlog_core",
+    "fastlog",
+    "proposer/node_api",
+    "proposer/db_sql",
+    "proposer/runer",
+]
+
+exclude = []
+
+resolver = "2"
+
+[workspace.lints.clippy]
+nursery = "allow"
+cargo = "allow"
+pedantic = "allow"
+restriction = "allow"
+style = "deny"
+complexity = "deny"
+perf = "deny"
+correctness = "deny"
+dbg_macro = "deny"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+incremental = true
+
+[profile.bench]
+debug = true
+
+[profile.artifact]
+inherits = "release"
+
