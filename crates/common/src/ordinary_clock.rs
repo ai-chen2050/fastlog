@@ -145,6 +145,15 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn hash_big_clock_sha256() -> anyhow::Result<()> {
+        let clock = OrdinaryClock((0..1<<27).map(|i| (i as _, 0)).collect());
+        let start_time = Instant::now();
+        let clock_hash = clock.sha256().to_fixed_bytes();
+        println!("{:?}, {:?}", clock_hash, start_time.elapsed());
+        Ok(())
+    }
+
     #[tokio::test]
     async fn stress_raw_update() -> anyhow::Result<()> {
         for size in (0..=12).step_by(2).map(|n| 1 << n) {

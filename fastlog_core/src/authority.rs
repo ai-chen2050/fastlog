@@ -35,6 +35,8 @@ pub struct AuthorityState {
     pub accounts: BTreeMap<FastPayAddress, AccountOffchainState>,
     /// The latest transaction index of the blockchain that the authority has seen.
     pub last_transaction_index: VersionNumber,
+    /// The sum of total txs that had been comminted.
+    pub shard_total_counts: VersionNumber,
     /// The sharding ID of this authority shard. 0 if one shard.
     pub shard_id: ShardId,
     /// The number of shards. 1 if single shard.
@@ -169,6 +171,11 @@ impl Authority for AuthorityState {
         sender_account.next_sequence_number = sender_sequence_number;
         sender_account.pending_confirmation = None;
         sender_account.confirmed_log.push(certificate.clone());
+        
+        // Update the shard_total_counts txs.
+        let shard_total_counts = self.shard_total_counts.increment()?;
+        self.shard_total_counts = shard_total_counts;
+        
         let info = sender_account.make_account_info(transfer.sender);
 
         // Update FastPay recipient state locally or issue a cross-shard update (Must never fail!)
@@ -328,6 +335,7 @@ impl AuthorityState {
             secret,
             accounts: BTreeMap::new(),
             last_transaction_index: VersionNumber::new(),
+            shard_total_counts: VersionNumber::new(),
             shard_id: 0,
             number_of_shards: 1,
         }
@@ -346,6 +354,7 @@ impl AuthorityState {
             secret,
             accounts: BTreeMap::new(),
             last_transaction_index: VersionNumber::new(),
+            shard_total_counts: VersionNumber::new(),
             shard_id,
             number_of_shards,
         }
