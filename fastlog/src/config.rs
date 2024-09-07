@@ -15,7 +15,7 @@ use std::{
     io::{BufRead, BufReader, BufWriter, Write},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthorityConfig {
     pub network_protocol: NetworkProtocol,
     #[serde(
@@ -35,7 +35,7 @@ impl AuthorityConfig {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct AuthorityServerConfig {
     pub authority: AuthorityConfig,
     pub key: KeyPair,

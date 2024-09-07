@@ -362,7 +362,7 @@ fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let options = ClientOpt::from_args();
 
-    let send_timeout = Duration::from_micros(options.send_timeout);
+    let send_timeout: Duration = Duration::from_micros(options.send_timeout);
     let recv_timeout = Duration::from_micros(options.recv_timeout);
     let accounts_config_path = &options.accounts;
     let committee_config_path = &options.committee;

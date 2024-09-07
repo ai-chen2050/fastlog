@@ -7,6 +7,7 @@ use actix_web::{middleware, web, App, HttpServer};
 use alloy_primitives::hex::FromHex;
 use alloy_primitives::B256;
 use alloy_wrapper::contracts::vrf_range::new_vrf_range_backend;
+use fastlog::config::AuthorityServerConfig;
 use node_api::config::ProposerConfig;
 use node_api::error::ProposerError;
 use node_api::error::{
@@ -23,7 +24,8 @@ use tracing::info;
 
 #[derive(Default)]
 pub struct ProposerFactory {
-    pub config: ProposerConfig,
+    pub pro_config: ProposerConfig,
+    pub auth_config: AuthorityServerConfig,
 }
 
 impl ProposerFactory {
@@ -31,8 +33,9 @@ impl ProposerFactory {
         Self::default()
     }
 
-    pub fn set_config(mut self, config: ProposerConfig) -> Self {
-        self.config = config;
+    pub fn set_config(mut self, config: ProposerConfig, auth: AuthorityServerConfig) -> Self {
+        self.pro_config = config;
+        self.auth_config = auth;
         self
     }
 
@@ -134,10 +137,10 @@ impl ProposerFactory {
     }
 
     pub async fn initialize_node(self) -> ProposerResult<ProposerArc> {
-        let prompt_sender = ProposerFactory::prepare_setup(&self.config).await?;
+        let prompt_sender = ProposerFactory::prepare_setup(&self.pro_config).await?;
 
         let arc_proposer =
-            ProposerFactory::create_proposer(self.config.clone(), prompt_sender).await?;
+            ProposerFactory::create_proposer(self.pro_config.clone(), prompt_sender).await?;
 
         ProposerFactory::create_actix_node(arc_proposer.clone()).await;
 

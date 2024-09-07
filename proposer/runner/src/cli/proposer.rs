@@ -1,5 +1,6 @@
 use crate::proposer::Proposer;
 use crate::proposer::ProposerArc;
+use fastlog::config::AuthorityServerConfig;
 use node_api::config;
 use node_api::config::ProposerConfig;
 use node_api::error::{ErrorCodes, ProposerConfigError};
@@ -9,15 +10,24 @@ use tracing::*;
 use crate::cli::command::{eth_account, init_db};
 use std::path::PathBuf;
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Debug)]
+#[structopt(name = "proposer-runner")]
 struct ProposerCli {
     #[structopt(
         short = "c",
-        long = "config",
+        long = "proposer_config",
         parse(from_os_str),
         help = "Yaml file only"
     )]
-    config_path: Option<std::path::PathBuf>,
+    config_path: std::path::PathBuf,
+
+    #[structopt(
+        short = "ac",
+        long = "authority_config",
+        parse(from_os_str),
+        help = "Json file only"
+    )]
+    authority_path: std::path::PathBuf,
 
     #[structopt(
         short = "i",
@@ -52,18 +62,19 @@ pub async fn run_cli() {
     if args.eth_account {
         help_info = false;
         info!("Gen a eth account, and keypair");
-        // Use the PostgreSQL connection string here for initialization
         if !eth_account() {
             return;
         }
     }
 
     // setup node
-    if let Some(config_path) = args.config_path {
+    if args.config_path.is_file() {
         help_info = false;
-        let proposer_config = construct_node_config(config_path.clone());
 
-        let _proposer = build_proposer(proposer_config.clone()).await;
+        let auth_config_path = args.authority_path.to_str().expect("Authority path not exist");
+        let proposer_config = construct_node_config(args.config_path);
+        let server_config = AuthorityServerConfig::read(auth_config_path).expect("Fail to read authority server config");
+        let _proposer = build_proposer(proposer_config, server_config).await;
     }
 
     if help_info {
@@ -85,13 +96,13 @@ pub fn construct_node_config(config_path: PathBuf) -> config::ProposerConfig {
             error!("nodeid illegal, must be hex format, and 64 bits");
             std::process::exit(ErrorCodes::PROCESS_EXIT);
         }
-        result => result.expect("failed to load zhronod config"),
+        result => result.expect("failed to load proposer config"),
     }
 }
 
-pub async fn build_proposer(config: ProposerConfig) -> ProposerArc {
+pub async fn build_proposer(config: ProposerConfig, auth: AuthorityServerConfig) -> ProposerArc {
     Proposer::proposer_factory()
-        .set_config(config)
+        .set_config(config, auth)
         .initialize_node()
         .await
         .map_err(|e| {

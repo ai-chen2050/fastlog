@@ -11,7 +11,7 @@ members = [
     "fastlog",
     "proposer/node_api",
     "proposer/db_sql",
-    "proposer/runer", 
+    "proposer/runner", 
 ]
 
 exclude = []

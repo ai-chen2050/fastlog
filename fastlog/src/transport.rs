@@ -27,6 +27,13 @@ arg_enum! {
     }
 }
 
+impl Default for NetworkProtocol {
+    fn default() -> Self {
+        NetworkProtocol::Udp
+    }
+}
+
+
 /// How to send and obtain data packets over an "active socket".
 pub trait DataStream: Send {
     fn write_data<'a>(

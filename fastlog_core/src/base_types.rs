@@ -36,12 +36,19 @@ pub struct UserData(pub Option<[u8; 32]>);
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 pub struct KeyPair(dalek::Keypair);
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, Default)]
 pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
 pub type PrimaryAddress = PublicKeyBytes;
 pub type FastPayAddress = PublicKeyBytes;
 pub type AuthorityName = PublicKeyBytes;
+
+impl Default for KeyPair {
+    fn default() -> Self {
+        let mut csprng = OsRng;
+        KeyPair(dalek::Keypair::generate(&mut csprng))
+    }
+}
 
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
