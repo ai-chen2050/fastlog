@@ -227,6 +227,11 @@ impl MessageHandler for RunningServerState {
                             .state
                             .handle_account_info_request(*message)
                             .map(|info| Some(serialize_info_response(&info))),
+                        SerializedMessage::PullStateReq(message) => self
+                            .server
+                            .state
+                            .handle_pull_state_request(*message)
+                            .map(|info| Some(serialize_pull_state_response(&info))),
                         SerializedMessage::CrossShard(message) => {
                             match self
                                 .server

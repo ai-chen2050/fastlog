@@ -77,6 +77,12 @@ pub trait Authority {
         &mut self,
         certificate: CertifiedTransferOrder,
     ) -> Result<(), FastPayError>;
+
+    /// Handle total counts requests for this shared. only same keypair can call
+    fn handle_pull_state_request(
+        &self,
+        request: PullStateClockRequest,
+    ) -> Result<PullStateClockResponse, FastPayError>;
 }
 
 impl Authority for AuthorityState {
@@ -289,6 +295,20 @@ impl Authority for AuthorityState {
         if let Some(idx) = request.request_received_transfers_excluding_first_nth {
             response.requested_received_transfers = account.received_log[idx..].to_vec();
         }
+        Ok(response)
+    }
+
+    fn handle_pull_state_request(
+        &self,
+        request: PullStateClockRequest,
+    ) -> Result<PullStateClockResponse, FastPayError> {
+        let shard_id = self.shard_id;
+        fp_ensure!(shard_id == request.shard_id, FastPayError::WrongShard);
+        let response = PullStateClockResponse {
+            sender: request.sender,
+            shard_id,
+            total_counts: self.shard_total_counts,
+        };
         Ok(response)
     }
 }

@@ -20,6 +20,8 @@ pub enum SerializedMessage {
     Error(Box<FastPayError>),
     InfoReq(Box<AccountInfoRequest>),
     InfoResp(Box<AccountInfoResponse>),
+    PullStateReq(Box<PullStateClockRequest>),
+    PullStateResp(Box<PullStateClockResponse>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
@@ -34,6 +36,8 @@ enum ShallowSerializedMessage<'a> {
     Error(&'a FastPayError),
     InfoReq(&'a AccountInfoRequest),
     InfoResp(&'a AccountInfoResponse),
+    PullStateReq(&'a PullStateClockRequest),
+    PullStateResp(&'a PullStateClockResponse),
 }
 
 fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), failure::Error>
@@ -96,6 +100,14 @@ pub fn serialize_info_request(value: &AccountInfoRequest) -> Vec<u8> {
 
 pub fn serialize_info_response(value: &AccountInfoResponse) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::InfoResp(value))
+}
+
+pub fn serialize_pull_state_request(value: &PullStateClockRequest) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::PullStateReq(value))
+}
+
+pub fn serialize_pull_state_response(value: &PullStateClockResponse) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::PullStateResp(value))
 }
 
 pub fn serialize_cross_shard(value: &CertifiedTransferOrder) -> Vec<u8> {

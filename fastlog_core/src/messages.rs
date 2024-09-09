@@ -89,6 +89,19 @@ pub struct AccountInfoResponse {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct PullStateClockRequest {
+    pub sender: FastPayAddress,
+    pub shard_id: ShardId,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct PullStateClockResponse {
+    pub sender: FastPayAddress,
+    pub shard_id: ShardId,
+    pub total_counts: VersionNumber,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct CrossShardUpdate {
     pub shard_id: ShardId,
     pub transfer_certificate: CertifiedTransferOrder,

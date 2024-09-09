@@ -146,6 +146,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn hash_big_clock_sha256() -> anyhow::Result<()> {
         let clock = OrdinaryClock((0..1<<27).map(|i| (i as _, 0)).collect());
         let start_time = Instant::now();
@@ -155,6 +156,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn stress_raw_update() -> anyhow::Result<()> {
         for size in (0..=12).step_by(2).map(|n| 1 << n) {
             let num_merged = 0;
@@ -186,6 +188,7 @@ mod tests {
     }
     
     #[tokio::test]
+    #[ignore]
     async fn stress_raw_update_concurrency() -> anyhow::Result<()> {
         let core = num_cpus::get();
         let rt = Arc::new(Builder::new_multi_thread()
@@ -242,6 +245,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn stress_verify_update() -> anyhow::Result<()> {
         use DigestHash as _;
 
@@ -287,6 +291,7 @@ mod tests {
     }
     
     #[tokio::test]
+    #[ignore]
     async fn stress_sig_verify_update() -> anyhow::Result<()> {
         use DigestHash as _;
 

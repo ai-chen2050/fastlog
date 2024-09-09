@@ -20,7 +20,7 @@ async fn status(_req: HttpRequest, op: web::Data<ProposerArc>) -> web::Json<Resp
     let (cpu_percent, cpu_nums, memory_total, memory_used) = machine_used();
 
     let resp_data = ProposerStatus {
-        node_id: op.config.node.node_id.clone(),
+        node_id: op.pro_config.node.node_id.clone(),
         cpu_percent: format!("{:.2}%", cpu_percent),
         cpu_nums: format!("{} cores", cpu_nums),
         mem_total: format!("{} M", memory_total / 1024 / 1024),

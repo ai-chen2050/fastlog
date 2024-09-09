@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = { version = "1.0.75", features = ["backtrace"] }
 common = { path = "../../crates/common" }
 types = { path = "../../crates/types" }
 tools = { version = "0.1.0", path = "../../crates/tools" }

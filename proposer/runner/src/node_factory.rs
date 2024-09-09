@@ -39,22 +39,25 @@ impl ProposerFactory {
     }
 
     pub async fn create_proposer(
-        config: ProposerConfig,
+        pro_config: ProposerConfig,
+        auth_config: AuthorityServerConfig,
         tee_vlc_sender: UnboundedSender<Update<NitroEnclavesClock>>,
         tee_vlc_receiver: UnboundedReceiver<UpdateOk<NitroEnclavesClock>>,
     ) -> ProposerResult<ProposerArc> {
-        let cfg = Arc::new(config.clone());
-        let node_id = config.node.node_id.clone();
+        let pro_cfg = Arc::new(pro_config.clone());
+        let auth_cfg = Arc::new(auth_config);
+        let node_id = pro_config.node.node_id.clone();
         let signer_key =
-            B256::from_hex(config.node.signer_key.clone()).map_err(PRODecodeSignerKeyError)?;
-        let txs_commit_socket = UdpSocket::bind(config.net.txs_commit_udp)
+            B256::from_hex(pro_config.node.signer_key.clone()).map_err(PRODecodeSignerKeyError)?;
+        let txs_commit_socket = UdpSocket::bind(pro_config.net.txs_commit_udp)
             .await
             .map_err(|err| PROBindTxCommitUDPError(err.to_string()))?;
-        let server_state = ServerState::new(signer_key, node_id, cfg.node.cache_msg_maximum);
+        let server_state = ServerState::new(signer_key, node_id, pro_cfg.node.cache_msg_maximum);
         let state = RwLock::new(server_state);
-        let storage = storage::Storage::new(cfg.clone()).await;
+        let storage = storage::Storage::new(pro_cfg.clone()).await;
         let proposer = Proposer {
-            config: cfg,
+            pro_config: pro_cfg,
+            auth_config: auth_cfg,
             _storage: storage,
             state,
             _tee_vlc_sender: tee_vlc_sender,
@@ -86,7 +89,7 @@ impl ProposerFactory {
         };
 
         HttpServer::new(app)
-            .bind(arc_proposer.config.net.rest_url.clone())
+            .bind(arc_proposer.pro_config.net.rest_url.clone())
             .expect("Failed to bind address")
             .run()
             .await
@@ -126,7 +129,7 @@ impl ProposerFactory {
         let (vlc_tee_tx, vlc_tee_rx) = ProposerFactory::prepare_setup(&self.pro_config).await?;
 
         let arc_proposer =
-            ProposerFactory::create_proposer(self.pro_config.clone(), vlc_tee_tx, vlc_tee_rx)
+            ProposerFactory::create_proposer(self.pro_config, self.auth_config, vlc_tee_tx, vlc_tee_rx)
                 .await?;
 
         ProposerFactory::create_actix_node(arc_proposer.clone()).await;

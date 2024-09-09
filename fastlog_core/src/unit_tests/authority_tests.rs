@@ -413,6 +413,15 @@ fn test_account_state_unknown_account() {
 }
 
 #[test]
+fn test_pull_state_clock_ok() {
+    let sender = dbg_addr(1);
+    let authority_state = init_state_with_account(sender, Balance::from(5));
+    let request = PullStateClockRequest{ sender, shard_id: 0 };
+    let counts = authority_state.handle_pull_state_request(request);
+    assert_eq!(counts.unwrap().total_counts, authority_state.shard_total_counts);
+}
+
+#[test]
 fn test_get_shards() {
     let num_shards = 16u32;
     let mut found = vec![false; num_shards as usize];

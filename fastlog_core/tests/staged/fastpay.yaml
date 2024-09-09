@@ -120,6 +120,18 @@ PublicKeyBytes:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+PullStateClockRequest:
+  STRUCT:
+    - sender:
+        TYPENAME: PublicKeyBytes
+    - shard_id: U32
+PullStateClockResponse:
+  STRUCT:
+    - sender:
+        TYPENAME: PublicKeyBytes
+    - shard_id: U32
+    - total_counts:
+        TYPENAME: SequenceNumber
 SequenceNumber:
   NEWTYPESTRUCT: U64
 SerializedMessage:
@@ -152,6 +164,14 @@ SerializedMessage:
       InfoResp:
         NEWTYPE:
           TYPENAME: AccountInfoResponse
+    7:
+      PullStateReq:
+        NEWTYPE:
+          TYPENAME: PullStateClockRequest
+    8:
+      PullStateResp:
+        NEWTYPE:
+          TYPENAME: PullStateClockResponse
 Signature:
   NEWTYPESTRUCT:
     TUPLEARRAY:

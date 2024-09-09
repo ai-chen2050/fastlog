@@ -22,6 +22,7 @@ impl ErrorCodes {
     pub const PRO_NEW_VRF_RANGE_CONTRACT_ERROR: u32 = 3006;
     pub const PRO_GET_RANGE_CONTRACT_ERROR: u32 = 3007;
     pub const PRO_BIND_TXCOMMIT_UDP_ERROR: u32 = 3008;
+    pub const PRO_CLIENT_BIND_UDP_ERROR: u32 = 3009;
 }
 
 pub type ProposerConfigResult<T> = Result<T, ProposerConfigError>;
@@ -121,4 +122,10 @@ pub enum ProposerError {
         ErrorCodes::PRO_BIND_TXCOMMIT_UDP_ERROR
     )]
     PROBindTxCommitUDPError(String),
+
+    #[error(
+        "Error: client bind udp failed, detail: {0}  (Error Code: {})",
+        ErrorCodes::PRO_CLIENT_BIND_UDP_ERROR
+    )]
+    PROClientBindUDPError(#[from] std::io::Error),
 }
