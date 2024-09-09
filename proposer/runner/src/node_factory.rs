@@ -1,24 +1,23 @@
 use crate::api::read::not_found;
-use crate::api::request::{listening_tee_resp_task, periodic_heartbeat_task, register_worker};
 use crate::handler::router;
 use crate::proposer::{Proposer, ProposerArc, ServerState};
 use crate::storage;
 use actix_web::{middleware, web, App, HttpServer};
 use alloy_primitives::hex::FromHex;
 use alloy_primitives::B256;
-use alloy_wrapper::contracts::vrf_range::new_vrf_range_backend;
 use fastlog::config::AuthorityServerConfig;
 use node_api::config::ProposerConfig;
 use node_api::error::ProposerError;
 use node_api::error::{
-    ProposerError::{OPDecodeSignerKeyError, OPNewVrfRangeContractError},
+    ProposerError::{PROBindTxCommitUDPError, PRODecodeSignerKeyError},
     ProposerResult,
 };
 use std::sync::Arc;
 use tee_vlc::nitro_clock::{
     tee_start_listening, try_connection, NitroEnclavesClock, Update, UpdateOk,
 };
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use tokio::net::UdpSocket;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
 use tracing::info;
 
@@ -41,30 +40,38 @@ impl ProposerFactory {
 
     pub async fn create_proposer(
         config: ProposerConfig,
-        tee_inference_sender: UnboundedSender<Update<NitroEnclavesClock>>,
+        tee_vlc_sender: UnboundedSender<Update<NitroEnclavesClock>>,
+        tee_vlc_receiver: UnboundedReceiver<UpdateOk<NitroEnclavesClock>>,
     ) -> ProposerResult<ProposerArc> {
         let cfg = Arc::new(config.clone());
         let node_id = config.node.node_id.clone();
         let signer_key =
-            B256::from_hex(config.node.signer_key.clone()).map_err(OPDecodeSignerKeyError)?;
-        let vrf_range_contract = new_vrf_range_backend(
-            &config.chain.chain_rpc_url,
-            &config.chain.vrf_range_contract,
-        )
-        .map_err(OPNewVrfRangeContractError)?;
-
+            B256::from_hex(config.node.signer_key.clone()).map_err(PRODecodeSignerKeyError)?;
+        let txs_commit_socket = UdpSocket::bind(config.net.txs_commit_udp)
+            .await
+            .map_err(|err| PROBindTxCommitUDPError(err.to_string()))?;
         let server_state = ServerState::new(signer_key, node_id, cfg.node.cache_msg_maximum);
         let state = RwLock::new(server_state);
         let storage = storage::Storage::new(cfg.clone()).await;
         let proposer = Proposer {
             config: cfg,
             _storage: storage,
-            _state: state,
-            _tee_vlc_sender: tee_inference_sender,
-            _vrf_range_contract: vrf_range_contract,
+            state,
+            _tee_vlc_sender: tee_vlc_sender,
+            txs_commit_socket,
         };
+        let arc_proposer = Arc::new(proposer);
 
-        Ok(Arc::new(proposer))
+        let arc_proposer_clone = arc_proposer.clone();
+        tokio::spawn(arc_proposer_clone.handle_certified_commit());
+        tokio::spawn(arc_proposer.clone().periodic_proposal());
+        tokio::spawn(
+            arc_proposer
+                .clone()
+                .listening_tee_resp_task(tee_vlc_receiver),
+        );
+
+        Ok(arc_proposer)
     }
 
     async fn create_actix_node(arc_proposer: ProposerArc) {
@@ -88,59 +95,39 @@ impl ProposerFactory {
 
     async fn prepare_setup(
         config: &ProposerConfig,
-    ) -> ProposerResult<UnboundedSender<Update<NitroEnclavesClock>>> {
+    ) -> ProposerResult<(
+        UnboundedSender<Update<NitroEnclavesClock>>,
+        UnboundedReceiver<UpdateOk<NitroEnclavesClock>>,
+    )> {
         // detect and connect tee enclave service, if not, and exit
-        let (prompt_sender, prompt_receiver) = unbounded_channel::<Update<NitroEnclavesClock>>();
+        let (vlc_tee_sender, vlc_reply_receiver) =
+            unbounded_channel::<Update<NitroEnclavesClock>>();
         let (answer_ok_sender, answer_ok_receiver) =
             unbounded_channel::<UpdateOk<NitroEnclavesClock>>();
 
         let (tee_cid, tee_port) = (config.net.tee_vlc_cid, config.net.tee_vlc_port);
         let result = try_connection(tee_cid, tee_port);
         if let Err(err) = result {
-            return Err(ProposerError::OPConnectTEEError(err.to_string()));
+            return Err(ProposerError::PROConnectTEEError(err.to_string()));
         } else {
             info!("connect llm tee service successed!");
         }
 
         tokio::spawn(tee_start_listening(
             result.unwrap(),
-            prompt_receiver,
+            vlc_reply_receiver,
             answer_ok_sender,
         ));
 
-        // register status to dispatcher service
-        let response = register_worker(config)
-            .await
-            .map_err(ProposerError::OPSetupRegister)?;
-
-        if response.status().is_success() {
-            info!(
-                "register worker to dispatcher success! response_body: {:?}",
-                response.text().await
-            )
-        } else {
-            return Err(ProposerError::CustomError(format!(
-                "Error: register to dispatcher failed, resp code {}",
-                response.status()
-            )));
-        }
-
-        // periodic heartbeat task
-        let config_clone = config.clone();
-        tokio::spawn(periodic_heartbeat_task(config_clone));
-
-        // answer callback
-        let config_clone = config.clone();
-        tokio::spawn(listening_tee_resp_task(config_clone, answer_ok_receiver));
-
-        Ok(prompt_sender)
+        Ok((vlc_tee_sender, answer_ok_receiver))
     }
 
     pub async fn initialize_node(self) -> ProposerResult<ProposerArc> {
-        let prompt_sender = ProposerFactory::prepare_setup(&self.pro_config).await?;
+        let (vlc_tee_tx, vlc_tee_rx) = ProposerFactory::prepare_setup(&self.pro_config).await?;
 
         let arc_proposer =
-            ProposerFactory::create_proposer(self.pro_config.clone(), prompt_sender).await?;
+            ProposerFactory::create_proposer(self.pro_config.clone(), vlc_tee_tx, vlc_tee_rx)
+                .await?;
 
         ProposerFactory::create_actix_node(arc_proposer.clone()).await;
 

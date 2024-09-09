@@ -20,7 +20,7 @@ pub struct Update<C>(pub C, pub Vec<C>, pub u64);
 // feel lazy to define event type for replying
 pub type UpdateOk<C> = (u64, C, Vec<Duration>);
 
-#[derive(Debug, Clone, derive_more::AsRef, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, derive_more::AsRef, Serialize, Deserialize)]
 #[derive_where(PartialOrd, PartialEq)]
 pub struct NitroEnclavesClock {
     #[as_ref]

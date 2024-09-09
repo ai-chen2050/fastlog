@@ -11,17 +11,17 @@ impl ErrorCodes {
     pub const IO_ERROR: u32 = 1003;
     pub const ILLEGAL_NODE_ID: u32 = 1004;
     pub const ILLEGAL_SIGNER: u32 = 1005;
-    
+
     pub const API_FAIL_TO_JSON: u32 = 2001;
 
-    pub const OP_CUSTOM_ERROR: u32 = 3001;
-    pub const OP_FAIL_REGISTER: u32 = 3002;
-    pub const OP_CONNECT_TEE_ERROR: u32 = 3003;
-    pub const OP_SEND_PROMPT_ERROR: u32 = 3004;
-    pub const OP_DECODE_SIGNER_KEY_ERROR: u32 = 3005;
-    pub const OP_NEW_VRF_RANGE_CONTRACT_ERROR: u32 = 3006;
-    pub const OP_GET_RANGE_CONTRACT_ERROR: u32 = 3007;
-    
+    pub const PRO_CUSTOM_ERROR: u32 = 3001;
+    pub const PRO_FAIL_REGISTER: u32 = 3002;
+    pub const PRO_CONNECT_TEE_ERROR: u32 = 3003;
+    pub const PRO_SEND_VLC_ERROR: u32 = 3004;
+    pub const PRO_DECODE_SIGNER_KEY_ERROR: u32 = 3005;
+    pub const PRO_NEW_VRF_RANGE_CONTRACT_ERROR: u32 = 3006;
+    pub const PRO_GET_RANGE_CONTRACT_ERROR: u32 = 3007;
+    pub const PRO_BIND_TXCOMMIT_UDP_ERROR: u32 = 3008;
 }
 
 pub type ProposerConfigResult<T> = Result<T, ProposerConfigError>;
@@ -70,50 +70,55 @@ pub enum ProposerAPIError {
     APIFailToJson,
 }
 
-
 pub type ProposerResult<T> = Result<T, ProposerError>;
 
 #[derive(Error, Debug)]
 pub enum ProposerError {
     #[error(
         "Error: some error happened, detail: {0} (Error Code: {})",
-        ErrorCodes::OP_CUSTOM_ERROR
+        ErrorCodes::PRO_CUSTOM_ERROR
     )]
     CustomError(String),
 
     #[error(
         "Error: register to dispatcher failed, detail: {0} (Error Code: {})",
-        ErrorCodes::OP_FAIL_REGISTER
+        ErrorCodes::PRO_FAIL_REGISTER
     )]
-    OPSetupRegister(#[from] reqwest::Error),
+    PROSetupRegister(#[from] reqwest::Error),
 
     #[error(
         "Error: connect to tee service failed, detail: {0}  (Error Code: {})",
-        ErrorCodes::OP_CONNECT_TEE_ERROR
+        ErrorCodes::PRO_CONNECT_TEE_ERROR
     )]
-    OPConnectTEEError(String),
+    PROConnectTEEError(String),
 
     #[error(
         "Error: send promtp to tee service failed, detail: {0}  (Error Code: {})",
-        ErrorCodes::OP_SEND_PROMPT_ERROR
+        ErrorCodes::PRO_SEND_VLC_ERROR
     )]
-    OPSendPromptError(String),
+    PROSendPromptError(String),
 
     #[error(
         "Error: decode signer private key error failed, detail: {0}  (Error Code: {})",
-        ErrorCodes::OP_DECODE_SIGNER_KEY_ERROR
+        ErrorCodes::PRO_DECODE_SIGNER_KEY_ERROR
     )]
-    OPDecodeSignerKeyError(#[from] alloy_primitives::hex::FromHexError),
+    PRODecodeSignerKeyError(#[from] alloy_primitives::hex::FromHexError),
 
     #[error(
         "Error: new vrf range contract failed, detail: {0}  (Error Code: {})",
-        ErrorCodes::OP_NEW_VRF_RANGE_CONTRACT_ERROR
+        ErrorCodes::PRO_NEW_VRF_RANGE_CONTRACT_ERROR
     )]
-    OPNewVrfRangeContractError(#[from] eyre::ErrReport),
+    PRONewVrfRangeContractError(#[from] eyre::ErrReport),
 
     #[error(
         "Error: get vrf range contract failed, detail: {0}  (Error Code: {})",
-        ErrorCodes::OP_GET_RANGE_CONTRACT_ERROR
+        ErrorCodes::PRO_GET_RANGE_CONTRACT_ERROR
     )]
-    OPGetVrfRangeContractError(String),
+    PROGetVrfRangeContractError(String),
+
+    #[error(
+        "Error: bind txs_commit_udp failed, detail: {0}  (Error Code: {})",
+        ErrorCodes::PRO_BIND_TXCOMMIT_UDP_ERROR
+    )]
+    PROBindTxCommitUDPError(String),
 }

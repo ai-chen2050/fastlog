@@ -57,7 +57,7 @@ pub trait Authority {
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> Result<(AccountInfoResponse, Option<CrossShardUpdate>), FastPayError>;
+    ) -> Result<(AccountInfoResponse, Option<CrossShardUpdate>, Option<SubmitCertifiedUpdate>), FastPayError>;
 
     /// Force synchronization to finalize transfers from Primary to FastPay.
     fn handle_primary_synchronization_order(
@@ -135,7 +135,7 @@ impl Authority for AuthorityState {
     fn handle_confirmation_order(
         &mut self,
         confirmation_order: ConfirmationOrder,
-    ) -> Result<(AccountInfoResponse, Option<CrossShardUpdate>), FastPayError> {
+    ) -> Result<(AccountInfoResponse, Option<CrossShardUpdate>, Option<SubmitCertifiedUpdate>), FastPayError> {
         let certificate = confirmation_order.transfer_certificate;
         // Check the certificate and retrieve the transfer data.
         fp_ensure!(
@@ -161,7 +161,7 @@ impl Authority for AuthorityState {
         }
         if sender_sequence_number > transfer.sequence_number {
             // Transfer was already confirmed.
-            return Ok((sender_account.make_account_info(transfer.sender), None));
+            return Ok((sender_account.make_account_info(transfer.sender), None, None));
         }
         sender_balance = sender_balance.try_sub(transfer.amount.into())?;
         sender_sequence_number = sender_sequence_number.increment()?;
@@ -183,9 +183,17 @@ impl Authority for AuthorityState {
             Address::FastPay(recipient) => recipient,
             Address::Primary(_) => {
                 // Nothing else to do for Primary recipients.
-                return Ok((info, None));
+                return Ok((info, None, None));
             }
         };
+        
+        // submit certificate to proposer
+        // todo: move endpoint to configuration
+        let submit_certified = Some(SubmitCertifiedUpdate {
+            remote_addr: "0.0.0.0:8090".to_string(),
+            transfer_certificate: certificate.clone(),
+        });
+
         // If the recipient is in the same shard, read and update the account.
         if self.in_shard(&recipient) {
             let recipient_account = self
@@ -198,14 +206,14 @@ impl Authority for AuthorityState {
                 .unwrap_or_else(|_| Balance::max());
             recipient_account.received_log.push(certificate);
             // Done updating recipient.
-            return Ok((info, None));
+            return Ok((info, None, submit_certified));
         }
         // Otherwise, we need to send a cross-shard update.
         let cross_shard = Some(CrossShardUpdate {
             shard_id: self.which_shard(&recipient),
             transfer_certificate: certificate,
         });
-        Ok((info, cross_shard))
+        Ok((info, cross_shard, submit_certified))
     }
 
     // NOTE: Need to rely on deliver-once semantics from comms channel

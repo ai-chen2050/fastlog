@@ -30,8 +30,7 @@ pub struct DbConfig {
 #[derive(Clone, Deserialize, Serialize, Debug, Default)]
 pub struct NetworkConfig {
     pub rest_url: String,
-    pub outer_url: String,
-    pub dispatcher_url: String,
+    pub txs_commit_udp: String,
     pub tee_vlc_cid: u32,
     pub tee_vlc_port: u32,
 }
@@ -41,10 +40,7 @@ pub struct NodeConfig {
     pub node_id: String,
     pub signer_key: String,
     pub cache_msg_maximum: u64,
-    pub heartbeat_interval: u64,
-
-    #[serde(default)]
-    pub ai_models: Vec<String>,
+    pub proposal_interval_ms: u64,
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug, Default)]

@@ -1,7 +1,6 @@
 use std::{fmt::Debug, hash::Hash};
 use serde::{Deserialize, Serialize};
 
-
 /// Payload is the vec<u8> but derive many traits, like hash, debug, clone, etc.
 #[derive(
     Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, derive_more::Deref, Serialize, Deserialize,

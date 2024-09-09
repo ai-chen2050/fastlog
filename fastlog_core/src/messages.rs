@@ -94,6 +94,12 @@ pub struct CrossShardUpdate {
     pub transfer_certificate: CertifiedTransferOrder,
 }
 
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct SubmitCertifiedUpdate {
+    pub remote_addr: String,
+    pub transfer_certificate: CertifiedTransferOrder,
+}
+
 impl Hash for TransferOrder {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.transfer.hash(state);

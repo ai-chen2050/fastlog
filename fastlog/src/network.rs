@@ -86,6 +86,36 @@ impl Server {
         }
     }
 
+    async fn forward_any_data_to_any_server(
+        network_protocol: NetworkProtocol,
+        this_shard: ShardId,
+        mut receiver: mpsc::UnboundedReceiver<(Vec<u8>, String)>,
+    ) {
+        let mut pool = network_protocol
+            .make_outgoing_connection_pool()
+            .await
+            .expect("Initialization should not fail");
+
+        let mut queries_sent = 0u64;
+        while let Some((buf, remote_address)) = receiver.next().await {
+            let status = pool.send_data_to(&buf, &remote_address).await;
+            if let Err(error) = status {
+                error!("Failed to send any data: {}", error);
+            } else {
+                debug!("Sent cross shard query: shard {} -> {}", this_shard, remote_address);
+                queries_sent += 1;
+                if queries_sent % 20000 == 0 {
+                    info!(
+                        "{} (shard {}) has sent {} cross-shard queries",
+                        remote_address,
+                        this_shard,
+                        queries_sent
+                    );
+                }
+            }
+        }
+    }
+
     pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
         info!(
             "Listening to {} traffic on {}:{}",
@@ -107,12 +137,20 @@ impl Server {
             self.state.shard_id,
             cross_shard_receiver,
         ));
+        
+        let (any_data_sender, any_data_receiver) = mpsc::unbounded::<(Vec<u8>, String)>();
+        tokio::spawn(Self::forward_any_data_to_any_server(
+            self.network_protocol,
+            self.state.shard_id,
+            any_data_receiver,
+        ));
 
         let buffer_size = self.buffer_size;
         let protocol = self.network_protocol;
         let state = RunningServerState {
             server: self,
             cross_shard_sender,
+            any_data_sender
         };
         // Launch server for the appropriate protocol.
         protocol.spawn_server(&address, state, buffer_size).await
@@ -122,6 +160,7 @@ impl Server {
 struct RunningServerState {
     server: Server,
     cross_shard_sender: mpsc::Sender<(Vec<u8>, ShardId)>,
+    any_data_sender: mpsc::UnboundedSender<(Vec<u8>, String)>,
 }
 
 impl MessageHandler for RunningServerState {
@@ -149,7 +188,7 @@ impl MessageHandler for RunningServerState {
                                 .state
                                 .handle_confirmation_order(confirmation_order)
                             {
-                                Ok((info, send_shard)) => {
+                                Ok((info, send_shard, submit_certified)) => {
                                     // Send a message to other shard
                                     if let Some(cross_shard_update) = send_shard {
                                         let shard = cross_shard_update.shard_id;
@@ -160,6 +199,19 @@ impl MessageHandler for RunningServerState {
                                         );
                                         self.cross_shard_sender
                                             .send((tmp_out, shard))
+                                            .await
+                                            .expect("internal channel should not fail");
+                                    };
+                                    // submit certified txs to proposer
+                                    if let Some(cross_shard_update) = submit_certified {
+                                        let addr = cross_shard_update.remote_addr;
+                                        let tmp_out = serialize_cert(&message);
+                                        debug!(
+                                            "submit certified txs to proposer: shared {} -> {}",
+                                            self.server.state.shard_id, addr
+                                        );
+                                        self.any_data_sender
+                                            .send((tmp_out, addr))
                                             .await
                                             .expect("internal channel should not fail");
                                     };

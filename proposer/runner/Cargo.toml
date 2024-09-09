@@ -5,12 +5,14 @@ edition = "2021"
 
 [dependencies]
 common = { path = "../../crates/common" }
+types = { path = "../../crates/types" }
 tools = { version = "0.1.0", path = "../../crates/tools" }
 node_api = { version = "0.1.0", path = "../node_api" }
 db_sql = { version = "0.1.0", path = "../db_sql" }
 tee_vlc = { version = "0.1.0", path = "../../tee_vlc" }
 alloy-wrapper = { path = "../../crates/alloy-wrapper" }
 fastlog = { path = "../../fastlog" }
+fastlog_core = { path = "../../fastlog_core" }
 structopt = "0.3.11"
 tracing = "0.1.40"
 base64 = "0.13"

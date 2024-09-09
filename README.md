@@ -83,5 +83,6 @@ cd ../..
 
 ## References
 
+* [Verifiable Logical Clock](https://arxiv.org/pdf/2405.13349)
 * [BCB: Byzantine Consistent Broadcast](https://www.bc.edu/content/dam/bc1/schools/mcas/cs/pdf/honors-thesis/Thesis_Yifan-Zhang.pdf)
 * [FastPay: High-Performance Byzantine Fault Tolerant Settlement](https://arxiv.org/abs/2003.11506)
