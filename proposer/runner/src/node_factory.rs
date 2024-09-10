@@ -9,7 +9,7 @@ use fastlog::config::AuthorityServerConfig;
 use node_api::config::ProposerConfig;
 use node_api::error::ProposerError;
 use node_api::error::{
-    ProposerError::{PROBindTxCommitUDPError, PRODecodeSignerKeyError},
+    ProposerError::{PRODecodeSignerKeyError, PROServerBindUDPError},
     ProposerResult,
 };
 use std::sync::Arc;
@@ -51,7 +51,14 @@ impl ProposerFactory {
             B256::from_hex(pro_config.node.signer_key.clone()).map_err(PRODecodeSignerKeyError)?;
         let txs_commit_socket = UdpSocket::bind(pro_config.net.txs_commit_udp)
             .await
-            .map_err(|err| PROBindTxCommitUDPError(err.to_string()))?;
+            .map_err(|err| {
+                PROServerBindUDPError(format!("txs_commit_socket, errmsg {}", err.to_string()))
+            })?;
+        let p2p_socket = UdpSocket::bind(pro_config.net.p2p.listen_address)
+            .await
+            .map_err(|err| {
+                PROServerBindUDPError(format!("p2p_socket, errmsg {}", err.to_string()))
+            })?;
         let server_state = ServerState::new(signer_key, node_id, pro_cfg.node.cache_msg_maximum);
         let state = RwLock::new(server_state);
         let storage = storage::Storage::new(pro_cfg.clone()).await;
@@ -62,17 +69,15 @@ impl ProposerFactory {
             state,
             _tee_vlc_sender: tee_vlc_sender,
             txs_commit_socket,
+            p2p_socket,
         };
         let arc_proposer = Arc::new(proposer);
 
         let arc_proposer_clone = arc_proposer.clone();
         tokio::spawn(arc_proposer_clone.handle_certified_commit());
+        tokio::spawn(arc_proposer.clone().handle_p2p_message());
         tokio::spawn(arc_proposer.clone().periodic_proposal());
-        tokio::spawn(
-            arc_proposer
-                .clone()
-                .listening_tee_resp_task(tee_vlc_receiver),
-        );
+        tokio::spawn(arc_proposer.clone().listening_tee_resp(tee_vlc_receiver));
 
         Ok(arc_proposer)
     }
@@ -128,9 +133,13 @@ impl ProposerFactory {
     pub async fn initialize_node(self) -> ProposerResult<ProposerArc> {
         let (vlc_tee_tx, vlc_tee_rx) = ProposerFactory::prepare_setup(&self.pro_config).await?;
 
-        let arc_proposer =
-            ProposerFactory::create_proposer(self.pro_config, self.auth_config, vlc_tee_tx, vlc_tee_rx)
-                .await?;
+        let arc_proposer = ProposerFactory::create_proposer(
+            self.pro_config,
+            self.auth_config,
+            vlc_tee_tx,
+            vlc_tee_rx,
+        )
+        .await?;
 
         ProposerFactory::create_actix_node(arc_proposer.clone()).await;
 

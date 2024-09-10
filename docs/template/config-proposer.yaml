@@ -10,6 +10,13 @@ net:
   txs_commit_udp: "0.0.0.0:8090"
   tee_vlc_cid: 15
   tee_vlc_port: 5005
+  p2p:
+    listen-address: "0.0.0.0:9500"
+    peers:
+      - "0.0.0.0:9501"
+      - "0.0.0.0:9502"
+      - "0.0.0.0:9503"
+
 node:
   node_id: "0x02a5592a6de1568f6efdc536da3ef887f98414cb"
   signer_key: "77f4b2fbf3f32687f03d84d323bd5cb443f53b0fc338b51c24e319a520c87217"

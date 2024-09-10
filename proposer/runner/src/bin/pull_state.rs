@@ -1,6 +1,7 @@
 use fastlog_core::base_types::PublicKeyBytes;
 use fastlog_core::messages::PullStateClockRequest;
 use fastlog_core::serialize::{deserialize_message, serialize_pull_state_request};
+use std::collections::BTreeMap;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -31,7 +32,13 @@ async fn main() -> std::io::Result<()> {
     let socket = Arc::new(UdpSocket::bind("127.0.0.1:0").await?);
 
     tokio::spawn(async move {
+        let mut clock = BTreeMap::default();
         while let Some((index, value)) = rx.recv().await {
+            if clock.keys().len() == num_shards {
+                println!("Clock: {:?}\n", clock);
+                clock = BTreeMap::default();
+            }
+            clock.insert(index, value);
             println!("Received result: index={}, value={}", index, value);
         }
     });

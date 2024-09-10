@@ -7,7 +7,7 @@ pub trait Clock: PartialOrd + Clone + Send + Sync + 'static {
     fn reduce(&self) -> LamportClock;
 }
 
-pub type LamportClock = u32;
+pub type LamportClock = u64;
 
 impl Clock for LamportClock {
     fn reduce(&self) -> LamportClock {
@@ -21,7 +21,7 @@ pub type KeyId = u64;
 #[derive(
     Debug, Clone, PartialEq, Eq, Hash, Default, derive_more::Deref, Serialize, Deserialize,
 )]
-pub struct OrdinaryClock(pub BTreeMap<KeyId, u32>);
+pub struct OrdinaryClock(pub BTreeMap<KeyId, u64>);
 
 impl AsRef<OrdinaryClock> for OrdinaryClock {
     fn as_ref(&self) -> &OrdinaryClock {

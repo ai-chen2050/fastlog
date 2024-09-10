@@ -33,6 +33,15 @@ pub struct NetworkConfig {
     pub txs_commit_udp: String,
     pub tee_vlc_cid: u32,
     pub tee_vlc_port: u32,
+    pub p2p: P2PConfig,
+}
+
+#[derive(Clone, Deserialize, Serialize, Debug, Default)]
+pub struct P2PConfig {
+    pub listen_address: String,
+
+    #[serde(default)]
+    pub peers: Vec<String>,
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug, Default)]

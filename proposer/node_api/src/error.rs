@@ -21,7 +21,7 @@ impl ErrorCodes {
     pub const PRO_DECODE_SIGNER_KEY_ERROR: u32 = 3005;
     pub const PRO_NEW_VRF_RANGE_CONTRACT_ERROR: u32 = 3006;
     pub const PRO_GET_RANGE_CONTRACT_ERROR: u32 = 3007;
-    pub const PRO_BIND_TXCOMMIT_UDP_ERROR: u32 = 3008;
+    pub const PRO_SERVER_BIND_UDP_ERROR: u32 = 3008;
     pub const PRO_CLIENT_BIND_UDP_ERROR: u32 = 3009;
 }
 
@@ -118,10 +118,10 @@ pub enum ProposerError {
     PROGetVrfRangeContractError(String),
 
     #[error(
-        "Error: bind txs_commit_udp failed, detail: {0}  (Error Code: {})",
-        ErrorCodes::PRO_BIND_TXCOMMIT_UDP_ERROR
+        "Error: server bind udp failed, detail: {0}  (Error Code: {})",
+        ErrorCodes::PRO_SERVER_BIND_UDP_ERROR
     )]
-    PROBindTxCommitUDPError(String),
+    PROServerBindUDPError(String),
 
     #[error(
         "Error: client bind udp failed, detail: {0}  (Error Code: {})",

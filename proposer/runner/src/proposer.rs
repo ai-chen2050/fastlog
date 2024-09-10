@@ -1,14 +1,16 @@
+use crate::checkpoint_mgr::CheckpointState;
 use crate::{node_factory::ProposerFactory, storage::Storage};
 use alloy::hex::ToHexExt;
 use alloy_primitives::B256;
 use common::crypto::core::DigestHash;
+use common::ordinary_clock::OrdinaryClock;
 use fastlog::config::AuthorityServerConfig;
 use fastlog_core::base_types::PublicKeyBytes;
 use fastlog_core::messages::{CertifiedTransferOrder, PullStateClockRequest};
 use fastlog_core::serialize::{deserialize_message, serialize_pull_state_request};
 use node_api::config::ProposerConfig;
 use node_api::error::ProposerError::PROClientBindUDPError;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tee_vlc::nitro_clock::{NitroEnclavesClock, Update, UpdateOk};
@@ -26,6 +28,7 @@ pub struct Proposer {
     pub state: RwLock<ServerState>,
     pub _tee_vlc_sender: UnboundedSender<Update<NitroEnclavesClock>>,
     pub txs_commit_socket: UdpSocket,
+    pub p2p_socket: UdpSocket,
 }
 
 pub type ProposerArc = Arc<Proposer>;
@@ -58,9 +61,25 @@ impl Proposer {
     }
 
     async fn start_checkpoints(self: Arc<Self>, mut rx: mpsc::Receiver<(u32, u64)>) {
+        let peers = Arc::new(self.pro_config.net.p2p.peers.clone());
         tokio::spawn(async move {
+            let num_shards = self.auth_config.authority.num_shards as usize;
+            let mut clock = BTreeMap::default();
             while let Some((index, value)) = rx.recv().await {
-                println!("Received result: index={}, value={}", index, value);
+                if clock.keys().len() == num_shards {
+                    debug!("Clock: {:?}\n", clock);
+                    let this_clock = &mut self.state.write().await.trusted_vlc;
+                    self.state.write().await.checkpoint_state.new_round(
+                        &self.auth_config.authority.address.0.encode_hex(),
+                        &peers.to_vec(),
+                        this_clock,
+                        &OrdinaryClock(clock),
+                        &self.p2p_socket,
+                    ).await;
+                    clock = BTreeMap::default();
+                }
+                clock.insert(index as u64, value);
+                debug!("Received result: index={}, value={}", index, value);
             }
         });
     }
@@ -105,7 +124,7 @@ impl Proposer {
                 (resp.shard_id, resp.total_counts.into())
             }
             _ => {
-                println!("not support");
+                error!("pull state response type not support");
                 (0, 0)
             }
         }
@@ -128,6 +147,11 @@ impl Proposer {
                         self.state
                             .write()
                             .await
+                            .message_ids
+                            .push_back(tx_id.clone());
+                        self.state
+                            .write()
+                            .await
                             .cache_commited_txs
                             .insert(tx_id, *certified_tx);
                     }
@@ -141,7 +165,43 @@ impl Proposer {
         }
     }
 
-    pub async fn listening_tee_resp_task(
+    pub async fn handle_p2p_message(self: Arc<Self>) {
+        info!(
+            "Now worker of p2p message listen on : {}",
+            self.pro_config.net.p2p.listen_address
+        );
+        // todo: refac
+        loop {
+            let mut buf = [0; DEFAULT_MAX_DATAGRAM_SIZE];
+            let (n, _src) = self.txs_commit_socket.recv_from(&mut buf).await.unwrap();
+            let msg = deserialize_message(&buf[..n]);
+            if let Ok(sm) = msg {
+                match sm {
+                    fastlog_core::serialize::SerializedMessage::Cert(certified_tx) => {
+                        use DigestHash as _;
+                        let tx_id = certified_tx.value.transfer.blake2().encode_hex();
+                        self.state
+                            .write()
+                            .await
+                            .message_ids
+                            .push_back(tx_id.clone());
+                        self.state
+                            .write()
+                            .await
+                            .cache_commited_txs
+                            .insert(tx_id, *certified_tx);
+                    }
+                    _ => {
+                        error!("Unsuported fastlog_core message");
+                    }
+                };
+            } else {
+                error!("Err msg or invalid serialize raw bytes");
+            }
+        }
+    }
+
+    pub async fn listening_tee_resp(
         self: Arc<Self>,
         mut receiver: UnboundedReceiver<UpdateOk<NitroEnclavesClock>>,
     ) {
@@ -165,8 +225,9 @@ impl Proposer {
 pub struct ServerState {
     pub trusted_vlc: NitroEnclavesClock,
     pub _signer_key: B256,
-    pub _message_ids: VecDeque<String>,
+    pub message_ids: VecDeque<String>,
     pub cache_commited_txs: HashMap<String, CertifiedTransferOrder>,
+    pub checkpoint_state: CheckpointState,
     pub _cache_maximum: u64,
 }
 
@@ -176,9 +237,10 @@ impl ServerState {
         Self {
             trusted_vlc: NitroEnclavesClock::default(),
             _signer_key: signer,
-            _message_ids: VecDeque::new(),
+            message_ids: VecDeque::new(),
             cache_commited_txs: HashMap::new(),
             _cache_maximum: cache_maximum,
+            checkpoint_state: CheckpointState::default(),
         }
     }
 }

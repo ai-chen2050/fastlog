@@ -1,5 +1,6 @@
 mod handler;
 mod node_factory;
+mod checkpoint_mgr;
 mod proposer;
 mod storage;
 mod api;
