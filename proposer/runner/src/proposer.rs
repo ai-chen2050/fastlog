@@ -1,16 +1,18 @@
-use crate::checkpoint_mgr::CheckpointState;
+use crate::checkpoint_mgr::{CheckpointMessage, CheckpointState};
 use crate::{node_factory::ProposerFactory, storage::Storage};
 use alloy::hex::ToHexExt;
 use alloy_primitives::B256;
+use bincode::Options;
 use common::crypto::core::DigestHash;
 use common::ordinary_clock::OrdinaryClock;
+use dag::DagLedger;
 use fastlog::config::AuthorityServerConfig;
 use fastlog_core::base_types::PublicKeyBytes;
 use fastlog_core::messages::{CertifiedTransferOrder, PullStateClockRequest};
 use fastlog_core::serialize::{deserialize_message, serialize_pull_state_request};
 use node_api::config::ProposerConfig;
 use node_api::error::ProposerError::PROClientBindUDPError;
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tee_vlc::nitro_clock::{NitroEnclavesClock, Update, UpdateOk};
@@ -69,13 +71,23 @@ impl Proposer {
                 if clock.keys().len() == num_shards {
                     debug!("Clock: {:?}\n", clock);
                     let this_clock = &mut self.state.write().await.trusted_vlc;
-                    self.state.write().await.checkpoint_state.new_round(
-                        &self.auth_config.authority.address.0.encode_hex(),
-                        &peers.to_vec(),
-                        this_clock,
-                        &OrdinaryClock(clock),
-                        &self.p2p_socket,
-                    ).await;
+                    let dag = &mut self.state.write().await.dag;
+                    let msg_ids = &self.state.write().await.message_ids;
+                    let tx_ids = msg_ids.last().unwrap();
+                    self.state
+                        .write()
+                        .await
+                        .checkpoint_state
+                        .new_round(
+                            &self.auth_config.authority.address.0.encode_hex(),
+                            &peers.to_vec(),
+                            this_clock,
+                            &OrdinaryClock(clock),
+                            &self.p2p_socket,
+                            dag,
+                            &vec![tx_ids.to_string()],
+                        )
+                        .await;
                     clock = BTreeMap::default();
                 }
                 clock.insert(index as u64, value);
@@ -144,11 +156,7 @@ impl Proposer {
                     fastlog_core::serialize::SerializedMessage::Cert(certified_tx) => {
                         use DigestHash as _;
                         let tx_id = certified_tx.value.transfer.blake2().encode_hex();
-                        self.state
-                            .write()
-                            .await
-                            .message_ids
-                            .push_back(tx_id.clone());
+                        self.state.write().await.message_ids.push(tx_id.clone());
                         self.state
                             .write()
                             .await
@@ -170,33 +178,19 @@ impl Proposer {
             "Now worker of p2p message listen on : {}",
             self.pro_config.net.p2p.listen_address
         );
-        // todo: refac
         loop {
             let mut buf = [0; DEFAULT_MAX_DATAGRAM_SIZE];
-            let (n, _src) = self.txs_commit_socket.recv_from(&mut buf).await.unwrap();
-            let msg = deserialize_message(&buf[..n]);
-            if let Ok(sm) = msg {
-                match sm {
-                    fastlog_core::serialize::SerializedMessage::Cert(certified_tx) => {
-                        use DigestHash as _;
-                        let tx_id = certified_tx.value.transfer.blake2().encode_hex();
-                        self.state
-                            .write()
-                            .await
-                            .message_ids
-                            .push_back(tx_id.clone());
-                        self.state
-                            .write()
-                            .await
-                            .cache_commited_txs
-                            .insert(tx_id, *certified_tx);
-                    }
-                    _ => {
-                        error!("Unsuported fastlog_core message");
-                    }
-                };
+            let (_n, _src) = self.p2p_socket.recv_from(&mut buf).await.unwrap();
+            let checkpoint_msg = bincode::options().deserialize::<CheckpointMessage>(&buf);
+            if let Ok(msg) = checkpoint_msg {
+                self.state
+                    .write()
+                    .await
+                    .checkpoint_state
+                    .clocks_in_round
+                    .insert(msg.addr, (msg.round, msg.clock, msg.tx_ids));
             } else {
-                error!("Err msg or invalid serialize raw bytes");
+                error!("Err checkpoint_msg or invalid serialize raw bytes");
             }
         }
     }
@@ -225,9 +219,10 @@ impl Proposer {
 pub struct ServerState {
     pub trusted_vlc: NitroEnclavesClock,
     pub _signer_key: B256,
-    pub message_ids: VecDeque<String>,
+    pub message_ids: Vec<String>,
     pub cache_commited_txs: HashMap<String, CertifiedTransferOrder>,
     pub checkpoint_state: CheckpointState,
+    pub dag: DagLedger, // persist to db
     pub _cache_maximum: u64,
 }
 
@@ -237,10 +232,11 @@ impl ServerState {
         Self {
             trusted_vlc: NitroEnclavesClock::default(),
             _signer_key: signer,
-            message_ids: VecDeque::new(),
+            message_ids: Vec::new(),
             cache_commited_txs: HashMap::new(),
             _cache_maximum: cache_maximum,
             checkpoint_state: CheckpointState::default(),
+            dag: DagLedger::new(),
         }
     }
 }

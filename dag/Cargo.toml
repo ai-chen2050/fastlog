@@ -1,0 +1,13 @@
+[package]
+name = "dag"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fastlog = { path = "../fastlog" }
+fastlog_core = { path = "../fastlog_core" }
+tee_vlc = { version = "0.1.0", path = "../tee_vlc" }
+common ={ path = "../crates/common", version = "0.1.0"}
+
+[lints]
+workspace = true

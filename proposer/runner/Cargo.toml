@@ -11,6 +11,7 @@ tools = { version = "0.1.0", path = "../../crates/tools" }
 node_api = { version = "0.1.0", path = "../node_api" }
 db_sql = { version = "0.1.0", path = "../db_sql" }
 tee_vlc = { version = "0.1.0", path = "../../tee_vlc" }
+dag = { version = "0.1.0", path = "../../dag" }
 alloy-wrapper = { path = "../../crates/alloy-wrapper" }
 fastlog = { path = "../../fastlog" }
 fastlog_core = { path = "../../fastlog_core" }

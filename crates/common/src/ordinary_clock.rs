@@ -61,6 +61,21 @@ impl OrdinaryClock {
         updated
     }
 
+    pub fn base<'a>(others: impl Iterator<Item = &'a Self>) -> Self {
+        let mut combined = BTreeMap::new();
+
+        for clock in others {
+            for (&key, &value) in &clock.0 {
+                combined
+                    .entry(key)
+                    .and_modify(|e: &mut u64| *e = (*e).min(value))
+                    .or_insert(value);
+            }
+        }
+
+        OrdinaryClock(combined)
+    }
+
     pub fn calculate_sha256(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
         let data = bincode::options().serialize(&self.0).expect("Failed to serialize data");
@@ -132,6 +147,34 @@ mod tests {
     #[test]
     fn default_is_genesis() -> anyhow::Result<()> {
         anyhow::ensure!(OrdinaryClock::default().is_genesis());
+        Ok(())
+    }
+
+    #[test]
+    fn test_clock_base_func() -> anyhow::Result<()> {
+        let mut clock1 = BTreeMap::new();
+        clock1.insert(1, 10);
+        clock1.insert(2, 0);
+        clock1.insert(3, 5);
+    
+        let mut clock2 = BTreeMap::new();
+        clock2.insert(1, 0);
+        clock2.insert(2, 20);
+        clock2.insert(3, 2);
+    
+        let mut clock3 = BTreeMap::new();
+        clock3.insert(1, 7);
+        clock3.insert(2, 15);
+        clock3.insert(4, 8);
+    
+        let oc1 = OrdinaryClock(clock1);
+        let oc2 = OrdinaryClock(clock2);
+        let oc3 = OrdinaryClock(clock3);
+    
+        let clocks = vec![&oc1, &oc2, &oc3];
+        let base_clock = OrdinaryClock::base(clocks.into_iter());
+        println!("{:?}", base_clock); // Should print: OrdinaryClock({1: 0, 2: 0, 3: 2, 4: 8})
+        assert_eq!(base_clock, OrdinaryClock(BTreeMap::from([(1, 0), (2, 0), (3, 2), (4, 8)])));
         Ok(())
     }
 
