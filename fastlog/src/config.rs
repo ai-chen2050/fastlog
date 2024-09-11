@@ -25,6 +25,8 @@ pub struct AuthorityConfig {
     pub address: FastPayAddress,
     pub host: String,
     pub base_port: u32,
+    pub proposer: String,
+    pub pro_port: u32,
     pub num_shards: u32,
 }
 

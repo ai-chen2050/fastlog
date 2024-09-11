@@ -14,6 +14,8 @@ pub struct Server {
     network_protocol: NetworkProtocol,
     base_address: String,
     base_port: u32,
+    proposer_addr: String,
+    pro_port: u32,
     state: AuthorityState,
     buffer_size: usize,
     cross_shard_queue_size: usize,
@@ -27,6 +29,8 @@ impl Server {
         network_protocol: NetworkProtocol,
         base_address: String,
         base_port: u32,
+        proposer_addr: String,
+        pro_port: u32,
         state: AuthorityState,
         buffer_size: usize,
         cross_shard_queue_size: usize,
@@ -35,6 +39,8 @@ impl Server {
             network_protocol,
             base_address,
             base_port,
+            proposer_addr,
+            pro_port,
             state,
             buffer_size,
             cross_shard_queue_size,
@@ -203,8 +209,8 @@ impl MessageHandler for RunningServerState {
                                             .expect("internal channel should not fail");
                                     };
                                     // submit certified txs to proposer
-                                    if let Some(cross_shard_update) = submit_certified {
-                                        let addr = cross_shard_update.remote_addr;
+                                    if let Some(_submit_certified_tx) = submit_certified {
+                                        let addr = format!("{}:{}", self.server.proposer_addr, self.server.pro_port);
                                         let tmp_out = serialize_cert(&message);
                                         debug!(
                                             "submit certified txs to proposer: shared {} -> {}",

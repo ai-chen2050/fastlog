@@ -144,7 +144,7 @@ impl Proposer {
 
     pub async fn handle_certified_commit(self: Arc<Self>) {
         info!(
-            "Now worker of certified commit listen on : {}",
+            "Certified txs commit listen on : {}",
             self.pro_config.net.txs_commit_udp
         );
         loop {
@@ -175,7 +175,7 @@ impl Proposer {
 
     pub async fn handle_p2p_message(self: Arc<Self>) {
         info!(
-            "Now worker of p2p message listen on : {}",
+            "Checkpoint p2p listen on : {}",
             self.pro_config.net.p2p.listen_address
         );
         loop {

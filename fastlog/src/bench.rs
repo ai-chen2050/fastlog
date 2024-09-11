@@ -33,6 +33,12 @@ struct ClientServerBenchmark {
     /// Base port number
     #[structopt(long, default_value = "9555")]
     port: u32,
+    /// Hostname
+    #[structopt(long, default_value = "127.0.0.1")]
+    proposer: String,
+    /// Base port number
+    #[structopt(long, default_value = "8090")]
+    pro_port: u32,
     /// Size of the FastPay committee
     #[structopt(long, default_value = "10")]
     committee_size: usize,
@@ -185,6 +191,8 @@ impl ClientServerBenchmark {
             self.protocol,
             self.host.clone(),
             self.port,
+            self.proposer.clone(),
+            self.pro_port,
             state,
             self.buffer_size,
             self.cross_shard_queue_size,

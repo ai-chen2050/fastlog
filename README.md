@@ -36,7 +36,8 @@ rm -f *.json *.txt
 # * `committee.json` is the public description of the FastPay committee.
 for I in 1 2 3 4
 do
-    ./server --server server"$I".json generate --host 127.0.0.1 --port 9"$I"00 --shards 4 >> committee.json
+    let J=I-1
+    ./server --server server"$I".json generate --host 127.0.0.1 --port 9"$I"00 --proposer 127.0.0.1 --pro-port 809"$J" --shards 4 >> committee.json
 done
 
 # Create configuration files for 1000 user accounts.

@@ -131,8 +131,14 @@ impl ProposerFactory {
     }
 
     pub async fn initialize_node(self) -> ProposerResult<ProposerArc> {
-        let (vlc_tee_tx, vlc_tee_rx) = ProposerFactory::prepare_setup(&self.pro_config).await?;
-
+        // skip tee dectect
+        // let (vlc_tee_tx, vlc_tee_rx) = ProposerFactory::prepare_setup(&self.pro_config).await?;
+        
+        let (vlc_tee_tx, _vlc_reply_receiver) =
+            unbounded_channel::<Update<NitroEnclavesClock>>();
+        let (_answer_ok_sender, vlc_tee_rx) =
+            unbounded_channel::<UpdateOk<NitroEnclavesClock>>();
+        
         let arc_proposer = ProposerFactory::create_proposer(
             self.pro_config,
             self.auth_config,

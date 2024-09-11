@@ -59,6 +59,8 @@ fn make_shard_server(
         server_config.authority.network_protocol,
         local_ip_addr.to_string(),
         server_config.authority.base_port,
+        server_config.authority.proposer,
+        server_config.authority.pro_port,
         state,
         buffer_size,
         cross_shard_queue_size,
@@ -148,6 +150,14 @@ enum ServerCommands {
         #[structopt(long)]
         port: u32,
 
+        /// Sets the public name of the proposer
+        #[structopt(long)]
+        proposer: String,
+
+        /// Sets the base port, i.e. the port on which the proposer server listens
+        #[structopt(long)]
+        pro_port: u32,
+
         /// Number of shards for this authority
         #[structopt(long)]
         shards: u32,
@@ -219,6 +229,8 @@ fn main() {
             protocol,
             host,
             port,
+            proposer,
+            pro_port,
             shards,
         } => {
             let (address, key) = get_key_pair();
@@ -228,6 +240,8 @@ fn main() {
                 host,
                 base_port: port,
                 num_shards: shards,
+                proposer,
+                pro_port,
             };
             let server = AuthorityServerConfig { authority, key };
             server
