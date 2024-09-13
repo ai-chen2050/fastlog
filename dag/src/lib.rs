@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use common::crypto::core::DigestHash;
 use fastlog_core::messages::CertifiedTransferOrder;
 use tee_vlc::nitro_clock::NitroEnclavesClock;
+use tracing::*;
 
 /// Define a struct for a certified transaction
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -21,7 +22,7 @@ pub struct DagNode {
 }
 
 // Define a struct for the DAG ledger
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DagLedger {
     pub total_height: u64,
     pub last_height_parents: HashSet<String>,
@@ -38,6 +39,7 @@ impl DagLedger {
     }
 
     pub fn add_node(&mut self, height: u64, tx_id_batch: &Vec<String>, verified_clock: NitroEnclavesClock, parents: HashSet<String>) {
+        debug!("Add dag node: input height {}, total_height {}", height, self.total_height);
         use DigestHash as _;
         let node_id = verified_clock.plain.blake2().to_string();
         let node = DagNode {

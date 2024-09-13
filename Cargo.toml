@@ -37,6 +37,7 @@ opt-level = 3
 
 [profile.release]
 opt-level = "z"
+debug = true
 lto = true
 strip = true
 incremental = true
