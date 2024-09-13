@@ -76,6 +76,9 @@ grep "$ACCOUNT1" accounts.json
 # Kill servers
 kill %1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14 %15 %16
 
+# or 
+ps aux | grep -i 'server' | awk '{print $2}' | xargs kill
+
 # Additional local benchmark
 ./bench
 

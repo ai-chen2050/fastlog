@@ -1,10 +1,11 @@
 use crate::api::read::not_found;
 use crate::handler::router;
 use crate::proposer::{Proposer, ProposerArc, ServerState};
-use crate::storage;
+use crate::{checkpoint_mgr::CheckpointMgr, storage};
 use actix_web::{middleware, web, App, HttpServer};
 use alloy_primitives::hex::FromHex;
 use alloy_primitives::B256;
+use dag::DagLedger;
 use fastlog::config::AuthorityServerConfig;
 use node_api::config::ProposerConfig;
 use node_api::error::ProposerError;
@@ -60,8 +61,13 @@ impl ProposerFactory {
                 PROServerBindUDPError(format!("p2p_socket, errmsg {}", err.to_string()))
             })?;
         let server_state = ServerState::new(signer_key, node_id, pro_cfg.node.cache_msg_maximum);
-        let state = RwLock::new(server_state);
+        let state = Arc::new(RwLock::new(server_state));
         let storage = storage::Storage::new(pro_cfg.clone()).await;
+
+        let checkpoint_mgr = Arc::new(RwLock::new(CheckpointMgr::new(
+            state.clone(),
+            DagLedger::new(),
+        )));
         let proposer = Proposer {
             pro_config: pro_cfg,
             auth_config: auth_cfg,
@@ -70,6 +76,7 @@ impl ProposerFactory {
             _tee_vlc_sender: tee_vlc_sender,
             txs_commit_socket,
             p2p_socket,
+            checkpoint_mgr,
         };
         let arc_proposer = Arc::new(proposer);
 
@@ -133,12 +140,10 @@ impl ProposerFactory {
     pub async fn initialize_node(self) -> ProposerResult<ProposerArc> {
         // skip tee dectect
         // let (vlc_tee_tx, vlc_tee_rx) = ProposerFactory::prepare_setup(&self.pro_config).await?;
-        
-        let (vlc_tee_tx, _vlc_reply_receiver) =
-            unbounded_channel::<Update<NitroEnclavesClock>>();
-        let (_answer_ok_sender, vlc_tee_rx) =
-            unbounded_channel::<UpdateOk<NitroEnclavesClock>>();
-        
+
+        let (vlc_tee_tx, _vlc_reply_receiver) = unbounded_channel::<Update<NitroEnclavesClock>>();
+        let (_answer_ok_sender, vlc_tee_rx) = unbounded_channel::<UpdateOk<NitroEnclavesClock>>();
+
         let arc_proposer = ProposerFactory::create_proposer(
             self.pro_config,
             self.auth_config,

@@ -1,13 +1,12 @@
-use crate::checkpoint_mgr::{CheckpointMessage, CheckpointState};
+use crate::checkpoint_mgr::{CheckpointMessage, CheckpointMgr};
 use crate::{node_factory::ProposerFactory, storage::Storage};
 use alloy::hex::ToHexExt;
 use alloy_primitives::B256;
 use bincode::Options;
 use common::crypto::core::DigestHash;
 use common::ordinary_clock::OrdinaryClock;
-use dag::DagLedger;
 use fastlog::config::AuthorityServerConfig;
-use fastlog_core::base_types::PublicKeyBytes;
+use fastlog_core::base_types::{encode_address, PublicKeyBytes};
 use fastlog_core::messages::{CertifiedTransferOrder, PullStateClockRequest};
 use fastlog_core::serialize::{deserialize_message, serialize_pull_state_request};
 use node_api::config::ProposerConfig;
@@ -26,11 +25,12 @@ use types::configuration::DEFAULT_MAX_DATAGRAM_SIZE;
 pub struct Proposer {
     pub pro_config: Arc<ProposerConfig>,
     pub auth_config: Arc<AuthorityServerConfig>,
-    pub _storage: Storage,
-    pub state: RwLock<ServerState>,
     pub _tee_vlc_sender: UnboundedSender<Update<NitroEnclavesClock>>,
+    pub _storage: Storage,
+    pub state: Arc<RwLock<ServerState>>,
     pub txs_commit_socket: UdpSocket,
     pub p2p_socket: UdpSocket,
+    pub checkpoint_mgr: Arc<RwLock<CheckpointMgr>>,
 }
 
 pub type ProposerArc = Arc<Proposer>;
@@ -53,13 +53,17 @@ impl Proposer {
         );
         let addresses: Arc<Vec<SocketAddr>> = Arc::new(
             (0..num_shards)
-                .map(|i| format!("127.0.0.1:{}", base_port + i).parse().unwrap())
+                .map(|i| {
+                    format!("{}:{}", self.auth_config.authority.host, base_port + i)
+                        .parse()
+                        .unwrap()
+                })
                 .collect(),
         );
 
         self.clone().start_checkpoints(rx).await;
         self.pull_shard_states(addresses, tx, socket, interval)
-            .await
+            .await;
     }
 
     async fn start_checkpoints(self: Arc<Self>, mut rx: mpsc::Receiver<(u32, u64)>) {
@@ -69,29 +73,24 @@ impl Proposer {
             let mut clock = BTreeMap::default();
             while let Some((index, value)) = rx.recv().await {
                 if clock.keys().len() == num_shards {
-                    debug!("Clock: {:?}\n", clock);
+                    debug!("Clock: {:?}", clock);
+                    let tx_ids = self.state.read().await.message_ids.last().cloned().unwrap_or_default();
                     let this_clock = &mut self.state.write().await.trusted_vlc;
-                    let dag = &mut self.state.write().await.dag;
-                    let msg_ids = &self.state.write().await.message_ids;
-                    let tx_ids = msg_ids.last().unwrap();
-                    self.state
-                        .write()
-                        .await
-                        .checkpoint_state
+                    let mut checkpoint_mgr = self.checkpoint_mgr.write().await;
+                    checkpoint_mgr
                         .new_round(
-                            &self.auth_config.authority.address.0.encode_hex(),
+                            &encode_address(&self.auth_config.authority.address),
                             &peers.to_vec(),
                             this_clock,
                             &OrdinaryClock(clock),
                             &self.p2p_socket,
-                            dag,
-                            &vec![tx_ids.to_string()],
+                            vec![tx_ids]
                         )
                         .await;
                     clock = BTreeMap::default();
                 }
                 clock.insert(index as u64, value);
-                debug!("Received result: index={}, value={}", index, value);
+                trace!("Received result: index={}, value={}", index, value);
             }
         });
     }
@@ -154,6 +153,7 @@ impl Proposer {
             if let Ok(sm) = msg {
                 match sm {
                     fastlog_core::serialize::SerializedMessage::Cert(certified_tx) => {
+                        debug!("Received certified tx: {:?}", certified_tx);
                         use DigestHash as _;
                         let tx_id = certified_tx.value.transfer.blake2().encode_hex();
                         self.state.write().await.message_ids.push(tx_id.clone());
@@ -178,19 +178,20 @@ impl Proposer {
             "Checkpoint p2p listen on : {}",
             self.pro_config.net.p2p.listen_address
         );
+
+        let peers = &self.pro_config.net.p2p.peers.clone();
         loop {
             let mut buf = [0; DEFAULT_MAX_DATAGRAM_SIZE];
-            let (_n, _src) = self.p2p_socket.recv_from(&mut buf).await.unwrap();
-            let checkpoint_msg = bincode::options().deserialize::<CheckpointMessage>(&buf);
+            let (n, _src) = self.p2p_socket.recv_from(&mut buf).await.unwrap();
+        
+            // Only use the portion of the buffer that was received
+            let checkpoint_msg = bincode::options().deserialize::<CheckpointMessage>(&buf[..n]);
             if let Ok(msg) = checkpoint_msg {
-                self.state
-                    .write()
-                    .await
-                    .checkpoint_state
-                    .clocks_in_round
-                    .insert(msg.addr, (msg.round, msg.clock, msg.tx_ids));
-            } else {
-                error!("Err checkpoint_msg or invalid serialize raw bytes");
+                debug!("Received p2p msg: {:?}", msg);
+                let mut checkpoint_mgr = self.checkpoint_mgr.write().await;
+                checkpoint_mgr.try_commit_checkpoint(msg, peers).await;
+            } else if let Err(err) = checkpoint_msg {
+                error!("Err checkpoint_msg deserialize, detail: {:?}", err);
             }
         }
     }
@@ -215,14 +216,12 @@ impl Proposer {
 }
 
 /// A cache state of a server node.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ServerState {
     pub trusted_vlc: NitroEnclavesClock,
     pub _signer_key: B256,
     pub message_ids: Vec<String>,
     pub cache_commited_txs: HashMap<String, CertifiedTransferOrder>,
-    pub checkpoint_state: CheckpointState,
-    pub dag: DagLedger, // persist to db
     pub _cache_maximum: u64,
 }
 
@@ -235,8 +234,6 @@ impl ServerState {
             message_ids: Vec::new(),
             cache_commited_txs: HashMap::new(),
             _cache_maximum: cache_maximum,
-            checkpoint_state: CheckpointState::default(),
-            dag: DagLedger::new(),
         }
     }
 }
