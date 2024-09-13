@@ -143,7 +143,7 @@ where
             "{size}, {num_merged}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}",
             elapsed_in_tee[0], elapsed_in_tee[1], elapsed_in_tee[2], elapsed_in_tee[3], elapsed_in_tee[4], elapsed 
         );
-        writeln!(lines, "{size},{num_merged},{}s", elapsed.as_secs_f32())?;
+        writeln!(lines, "{size},{num_merged},{}ms", elapsed.as_millis())?;
         verify(clock)?
     }
     Ok(())
